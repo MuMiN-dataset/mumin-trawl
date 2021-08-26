@@ -1,0 +1,1 @@
+CREATE CONSTRAINT tweetConstraint IF NOT EXISTS ON (n:Tweet) ASSERT n.tweetId IS UNIQUE

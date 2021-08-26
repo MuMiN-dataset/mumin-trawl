@@ -1,0 +1,1 @@
+CREATE CONSTRAINT mediaConstraint IF NOT EXISTS ON (n:Media) ASSERT n.mediaId IS UNIQUE

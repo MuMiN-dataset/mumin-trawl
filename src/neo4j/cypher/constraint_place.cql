@@ -1,0 +1,1 @@
+CREATE CONSTRAINT placeConstraint IF NOT EXISTS ON (n:Place) ASSERT n.placeId IS UNIQUE

@@ -1,0 +1,1 @@
+CREATE CONSTRAINT pollConstraint IF NOT EXISTS ON (n:Poll) ASSERT n.pollId IS UNIQUE

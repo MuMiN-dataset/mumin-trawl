@@ -1,0 +1,1 @@
+CREATE CONSTRAINT claimConstraint IF NOT EXISTS ON (n:Claim) ASSERT n.claim IS UNIQUE

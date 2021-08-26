@@ -1,0 +1,1 @@
+CREATE CONSTRAINT hashtagConstraint IF NOT EXISTS ON (n:Hashtag) ASSERT n.name IS UNIQUE

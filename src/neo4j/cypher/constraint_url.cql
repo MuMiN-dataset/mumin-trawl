@@ -1,0 +1,1 @@
+CREATE CONSTRAINT urlConstraint IF NOT EXISTS ON (n:Url) ASSERT n.name IS UNIQUE

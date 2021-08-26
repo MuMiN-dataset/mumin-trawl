@@ -1,0 +1,3 @@
+CREATE CONSTRAINT userNameConstraint IF NOT EXISTS ON (n:User)
+ASSERT n.userName IS UNIQUE;
+

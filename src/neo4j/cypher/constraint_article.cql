@@ -1,0 +1,1 @@
+CREATE CONSTRAINT articleConstraint IF NOT EXISTS ON (n:Article) ASSERT n.url IS UNIQUE
