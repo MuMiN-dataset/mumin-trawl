@@ -2,7 +2,6 @@
 __pycache__/
 *.py[cod]
 *$py.class
-
 # C extensions
 *.so
 
@@ -127,3 +126,29 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# VIm files
+.vim
+**/*.swp
+**/*.swo
+**/*.swn
+
+# Models
+models/
+
+# Logs
+**/logs/
+**/results/
+lightning_logs/
+**/nohup.out
+**/tb_logs
+
+**/.DS_Store
+**/*latexmk
+**/*.fls
+**/*.aux
+**/*.gz
+**/*.bbl
+**/*.blg
+**/*.log
+**/*.out
