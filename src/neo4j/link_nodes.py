@@ -90,7 +90,7 @@ def compute_similarity(claims, node_type: str):
     similarities = torch.div(torch.div(dot, claim_norm), node_norm)
 
     for claim_idx in range(similarities.size(0)):
-        similar_nodes = torch.nonzero(similarities[claim_idx] > 0.5)
+        similar_nodes = torch.nonzero(similarities[claim_idx] > 0.7)
         if similar_nodes.size(0) > 0:
             new_node_ids = node_ids[similar_nodes].squeeze(1).tolist()
             new_scores = (similarities[claim_idx][similar_nodes]
