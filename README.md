@@ -82,9 +82,8 @@ will then contain all the claims from that fact-checking website.
 
 ### Fetching tweets
 The tweets are fetched using a Twitter API wrapper, `Twitter`, which is defined
-in the `twitter.py` script. As with the `FactChecker` wrapper, this wrapper
-only has a single method, `query`, which can be used to query the Twitter
-Full-Archive Search API.
+in the `twitter.py` script. This primary method of this wrapper, `query`, which
+can be used to query the Twitter Full-Archive Search API.
 
 The tweets are then fetched primarily using the
 `fetch_tweets_from_extracted_keywords` function in the `fetch_tweets.py`
@@ -198,6 +197,16 @@ With the links in place, the public database (i.e., tweet IDs rather than the
 tweets themselves) can then be dumped using the `dump_database` function in the
 `neo4j/dump_database.py` script. The folder containing the dump needs to be
 specified by changing the `dump_dir` variable in this script.
+
+### Fetching replies and social network
+In our database we only dealt with the _source tweets_, being the tweets that
+initiates a Twitter thread, and did not include any of the retweets, as this
+would simply require too much memory. Instead, now that we have the tweet IDs
+of the source tweets and user IDs of the final dataset, we can add in this
+information using the `fetch_retweets`, `fetch_followers` and `fetch_followees`
+functions in the `neo4j/finalise_tweet_data.py` script. Again, the `dump_dir`
+variable in this script needs to be changed to where the database dump is
+located.
 
 
 ## Related Repositories
