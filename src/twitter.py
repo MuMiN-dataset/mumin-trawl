@@ -1,7 +1,7 @@
 '''Wrapper for the Twitter API'''
 
 import requests
-from typing import Optional, Union, Dict
+from typing import Optional, Union, Dict, List
 import pandas as pd
 import datetime as dt
 import time
@@ -83,7 +83,7 @@ class Twitter:
                             'voting_status']
 
     def query(self,
-              query: str,
+              query: str = None,
               max_results: int = 10,
               from_date: Optional[dt.datetime] = None,
               to_date: Optional[dt.datetime] = None,
@@ -158,21 +158,23 @@ class Twitter:
         '''
         # Ensure that `from_date` and `to_date` are not before 2006-03-21
         min_datetime = dt.datetime(2006, 3, 21, tzinfo=dt.timezone.utc)
-        if from_date < min_datetime:
+        if from_date is not None and from_date < min_datetime:
             from_date = min_datetime
-        if to_date < min_datetime:
+        if to_date is not None and to_date < min_datetime:
             to_date = min_datetime
 
         # Ensure that `from_date` and `to_date` are not after today's date
         max_datetime = dt.datetime.now(dt.timezone.utc)
-        if from_date > max_datetime:
+        if from_date is not None and from_date > max_datetime:
             from_date = max_datetime
-        if to_date > max_datetime:
+        if to_date is not None and to_date > max_datetime:
             to_date = max_datetime
 
         # If `from_date` and `to_date` are equal or if `from_date` happens
         # *after* `to_date` then return empty dataframes
-        if from_date >= to_date:
+        if (from_date is not None and
+                to_date is not None and
+                from_date >= to_date):
             empty_df = pd.DataFrame()
             return dict(tweets=empty_df, authors=empty_df, media=empty_df,
                         replies=empty_df, polls=empty_df, places=empty_df,
@@ -180,7 +182,10 @@ class Twitter:
 
         # Initialise `query_items`. Here "-(is:nullcast)" means that we ignore
         # ad tweets
-        query_items = [query, '-(is:nullcast)']
+        if query is not None:
+            query_items = [query, '-(is:nullcast)']
+        else:
+            query_items = ['-(is:nullcast)']
 
         # Add language to the query
         if language is not None:
@@ -279,6 +284,7 @@ class Twitter:
                 response = requests.get(self.base_url,
                                         params=params,
                                         headers=self.headers)
+
             if len(batch_results) > 1 and progress_bar:
                 pbar.set_description('Fetching tweets')
 
@@ -370,5 +376,164 @@ class Twitter:
         all_dfs = dict(tweets=tweet_df, authors=user_df, media=media_df,
                        replies=reply_df, polls=poll_df, places=place_df,
                        metadata=meta_df)
+
+        return all_dfs
+
+    def get_followers(self, user_id: Union[int, List[int]]):
+
+        # Make sure `user_id` is a list
+        if isinstance(user_id, str) or isinstance(user_id, int):
+            user_ids = [user_id]
+        else:
+            user_ids = user_id
+
+        # Initialise dataframes
+        tweet_df = pd.DataFrame()
+        user_df = pd.DataFrame()
+        media_df = pd.DataFrame()
+        reply_df = pd.DataFrame()
+        poll_df = pd.DataFrame()
+        place_df = pd.DataFrame()
+        meta_df = pd.DataFrame()
+
+        # Initialise parameters used in the GET requests
+        params = {'user.fields': ','.join(self.user_fields),
+                  'max_results': 1000}
+
+        for user_id in user_ids:
+
+            # Define GET request endpoint
+            url = (f'https://api.twitter.com/2/users/{user_id}'
+                   f'/followers')
+
+            # Perform the GET request
+            response = requests.get(url,
+                                    params=params,
+                                    headers=self.headers)
+
+            # If we have reached the API limit then wait a bit and try again
+            while response.status_code in [429, 503]:
+                logger.debug('Request limit reached. Waiting...')
+                time.sleep(1)
+                response = requests.get(url,
+                                        params=params,
+                                        headers=self.headers)
+
+            # If the GET request failed, then stop and output the status code
+            if response.status_code != 200:
+                raise RuntimeError(f'[{response.status_code}] {response.text}')
+
+            # Convert the response to a dict
+            data_dict = response.json()
+
+            # If the query returned errors, then raise an exception
+            if 'data' not in data_dict and 'errors' in data_dict:
+                error = data_dict['errors'][0]
+                if (('User has been suspended' in error['detail']) or
+                        ('Could not find user with id' in error['detail'])):
+                    continue
+                else:
+                    raise RuntimeError(error["detail"])
+
+            # User dataframe
+            if 'data' in data_dict:
+                users = data_dict['data']
+                df = pd.json_normalize(users)
+                df.set_index('id', inplace=True)
+
+                # Add `followee` column
+                df['followee'] = [user_id for _ in range(len(df))]
+
+                user_df = pd.concat((user_df, df))
+
+            # Meta dataframe
+            meta_dict = data_dict['meta']
+            if meta_dict['result_count'] > 0:
+                meta_dict['date'] = dt.datetime.strftime(dt.datetime.utcnow(),
+                                                         '%Y-%m-%dT%H:%M:%S')
+                df = pd.DataFrame.from_records([meta_dict], index='date')
+                meta_df = pd.concat((meta_df, df))
+
+        all_dfs = dict(users=user_df, metadata=meta_df)
+
+        return all_dfs
+
+
+    def get_followees(self, user_id: Union[int, List[int]]):
+
+        # Make sure `user_id` is a list
+        if isinstance(user_id, str) or isinstance(user_id, int):
+            user_ids = [user_id]
+        else:
+            user_ids = user_id
+
+        # Initialise dataframes
+        tweet_df = pd.DataFrame()
+        user_df = pd.DataFrame()
+        media_df = pd.DataFrame()
+        reply_df = pd.DataFrame()
+        poll_df = pd.DataFrame()
+        place_df = pd.DataFrame()
+        meta_df = pd.DataFrame()
+
+        # Initialise parameters used in the GET request
+        params = {'user.fields': ','.join(self.user_fields),
+                  'max_results': 1000}
+
+        for user_id in user_ids:
+
+            # Define GET request endpoint
+            url = (f'https://api.twitter.com/2/users/{user_id}'
+                   f'/following')
+
+            # Perform the GET request
+            response = requests.get(url,
+                                    params=params,
+                                    headers=self.headers)
+
+            # If we have reached the API limit then wait a bit and try again
+            while response.status_code in [429, 503]:
+                logger.debug('Request limit reached. Waiting...')
+                time.sleep(1)
+                response = requests.get(url,
+                                        params=params,
+                                        headers=self.headers)
+
+            # If the GET request failed, then stop and output the status code
+            if response.status_code != 200:
+                raise RuntimeError(f'[{response.status_code}] {response.text}')
+
+            # Convert the response to a dict
+            data_dict = response.json()
+
+            # If the query returned errors, then raise an exception
+            if 'data' not in data_dict and 'errors' in data_dict:
+                error = data_dict['errors'][0]
+                if (('User has been suspended' in error['detail']) or
+                        ('Could not find user with id' in error['detail'])):
+                    continue
+                else:
+                    raise RuntimeError(error["detail"])
+
+            # User dataframe
+            if 'data' in data_dict:
+                users = data_dict['data']
+                df = pd.json_normalize(users)
+                df.set_index('id', inplace=True)
+
+                # Add `follower` column
+                df['follower'] = [user_id for _ in range(len(df))]
+
+                user_df = pd.concat((user_df, df))
+
+            # Meta dataframe
+            meta_dict = data_dict['meta']
+            if meta_dict['result_count'] > 0:
+                meta_dict['date'] = dt.datetime.strftime(dt.datetime.utcnow(),
+                                                         '%Y-%m-%dT%H:%M:%S')
+                df = pd.DataFrame.from_records([meta_dict], index='date')
+                meta_df = pd.concat((meta_df, df))
+
+        all_dfs = dict(users=user_df, metadata=meta_df)
 
         return all_dfs
