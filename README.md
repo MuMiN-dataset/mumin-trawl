@@ -198,7 +198,7 @@ tweets themselves) can then be dumped using the `dump_database` function in the
 `neo4j/dump_database.py` script. The folder containing the dump needs to be
 specified by changing the `dump_dir` variable in this script.
 
-### Fetching replies and social network
+### Fetching replies and social network
 In our database we only dealt with the _source tweets_, being the tweets that
 initiates a Twitter thread, and did not include any of the retweets, as this
 would simply require too much memory. Instead, now that we have the tweet IDs
