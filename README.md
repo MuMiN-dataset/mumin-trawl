@@ -1,8 +1,8 @@
 # MuMiN-Trawl
 This repository contains the source code used to construct, from scratch, the
 MuMiN dataset from the paper [Nielsen and McConville: _MuMiN: A Large-Scale
-Multilingual Multimodal Fact-Checked Misinformation Dataset with Linked Social
-Network Posts_ (2021)](https://openreview.net/forum?id=sOLdMFkQe7).
+Multilingual Multimodal Fact-Checked Misinformation Social Network Dataset_
+(2021)](https://arxiv.org/abs/2202.11684).
 
 The idea behind releasing this repository is to give developers and researchers
 a way to extend the MuMiN framework, or to use parts of this project to further
@@ -212,6 +212,8 @@ located.
 ## Related Repositories
 - [MuMiN](https://github.com/CLARITI-REPHRAIN/mumin), containing the
   paper in PDF and LaTeX form.
-- [MuMiN-Build](https://github.com/CLARITI-REPHRAIN/mumin-build),
+- [MuMiN-build](https://github.com/CLARITI-REPHRAIN/mumin-build),
   containing the scripts for the Python package `mumin`, used to compile the
   dataset and export it to various graph machine learning frameworks.
+- [MuMiN-baseline](https://github.com/MuMiN-dataset/mumin-baseline), containing
+  the scripts to train the baselines introduced in the paper.
