@@ -210,6 +210,9 @@ located.
 
 
 ## Related Repositories
+- [MuMiN website](https://mumin-dataset.github.io/), the central place for the
+  MuMiN ecosystem, containing tutorials, leaderboards and links to the paper
+  and related repositories.
 - [MuMiN](https://github.com/MuMiN-dataset/mumin), containing the
   paper in PDF and LaTeX form.
 - [MuMiN-build](https://github.com/MuMiN-dataset/mumin-build),
