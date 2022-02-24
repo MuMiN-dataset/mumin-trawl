@@ -210,9 +210,9 @@ located.
 
 
 ## Related Repositories
-- [MuMiN](https://github.com/CLARITI-REPHRAIN/mumin), containing the
+- [MuMiN](https://github.com/MuMiN-dataset/mumin), containing the
   paper in PDF and LaTeX form.
-- [MuMiN-build](https://github.com/CLARITI-REPHRAIN/mumin-build),
+- [MuMiN-build](https://github.com/MuMiN-dataset/mumin-build),
   containing the scripts for the Python package `mumin`, used to compile the
   dataset and export it to various graph machine learning frameworks.
 - [MuMiN-baseline](https://github.com/MuMiN-dataset/mumin-baseline), containing
