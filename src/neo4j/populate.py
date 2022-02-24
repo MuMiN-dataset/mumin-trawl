@@ -91,7 +91,7 @@ def populate(start_from_scratch: bool = False,
         tweets = dataframes['tweets']
         rt_count = 'public_metrics.retweet_count'
         tweets = tweets[tweets[rt_count].map(lambda x: isinstance(x, int))]
-        tweets = tweets[tweets[rt_count] >= 5]
+        tweets = tweets[tweets[rt_count] >= min_retweets]
         dataframes['tweets'] = tweets
 
         # Filter the user dataframe
@@ -298,7 +298,7 @@ def process_url(url: str):
         # Create the corresponding Article node
         query = '''
             MERGE (n:Article {url:$url})
-            ON CREATE SET
+            SET
                 n.title = $title,
                 n.authors = $authors,
                 n.publish_date = $publish_date,
@@ -455,7 +455,7 @@ def create_claims(start_from_scratch: bool = False):
     # Create the cypher query that creates a `Claim` node
     create_claim_query = '''
         MERGE (c:Claim {claim: $claim})
-        ON CREATE SET
+        SET
             c.source = $source,
             c.date = $date,
             c.language = $language
@@ -467,7 +467,7 @@ def create_claims(start_from_scratch: bool = False):
         MATCH (n:Reviewer {url: $reviewer})
         MATCH (c:Claim {claim: $claim})
         MERGE (n)-[r:HAS_REVIEWED]->(c)
-        ON CREATE SET
+        SET
             r.raw_verdict = $raw_verdict,
             r.raw_verdict_en = $raw_verdict_en,
             r.predicted_verdict = $predicted_verdict

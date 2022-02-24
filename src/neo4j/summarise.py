@@ -30,15 +30,18 @@ def summarise_articles(start_from_scratch: bool = False):
         MATCH (a:Article)
         WHERE exists(a.title_en) AND
               exists(a.content_en) AND
-              NOT exists(a.summary)
+              NOT exists(a.summary) AND
+              NOT exists(a.beingSummarised)
+        SET a.beingSummarised = true
         RETURN a.url as url, a.title_en as title, a.content_en as content
-        LIMIT 2
+        LIMIT 100
     '''
 
     # Define the cypher query used to set the summary on the Article node
     set_summary_query = '''
         UNWIND $url_summaries as url_summary
         MATCH (a:Article {url:url_summary.url})
+        REMOVE a.beingSummarised
         SET a.summary = url_summary.summary
     '''
 
@@ -65,7 +68,7 @@ def summarise_articles(start_from_scratch: bool = False):
     pbar.update(num_summarised)
 
     # Continue summarising until all articles have been summnarised
-    while graph.query(not_summarised_count_query).num_articles[0] > 0:
+    while graph.query(not_summarised_count_query).num_articles[0]> 0:
 
         # Fetch new articles
         article_df = graph.query(get_article_query)
@@ -76,19 +79,25 @@ def summarise_articles(start_from_scratch: bool = False):
         # Tokenise the content of the articles
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            tokens = tokeniser(docs, return_tensors='pt', padding=True,
-                               truncation=True, max_length=1_000)
 
             # Extract the summary of the articles
-            summary_ids = model.generate(tokens['input_ids'].cuda(),
-                                         num_beams=4,
-                                         max_length=512,
-                                         early_stopping=True)
-            summaries = tokeniser.batch_decode(
-                summary_ids,
-                skip_special_tokens=True,
-                clean_up_tokenization_spaces=False
-            )
+            summaries = list()
+            for doc in docs:
+                tokens = tokeniser([doc], return_tensors='pt', padding=True,
+                                   truncation=True, max_length=1000)
+
+                summary_ids = model.generate(tokens['input_ids'].cuda(),
+                                             num_beams=4,
+                                             max_length=512,
+                                             early_stopping=True)
+
+                summary = tokeniser.batch_decode(
+                    summary_ids,
+                    skip_special_tokens=True,
+                    clean_up_tokenization_spaces=False
+                )[0]
+
+                summaries.append(summary)
 
         # Set the summary as an attribute on the Article nodes
         url_summaries = [dict(url=url, summary=summary)
@@ -96,7 +105,9 @@ def summarise_articles(start_from_scratch: bool = False):
         graph.query(set_summary_query, url_summaries=url_summaries)
 
         # Update the progress bar
-        pbar.update(len(docs))
+        old_summarised = int(num_summarised)
+        num_summarised = graph.query(summarised_count_query).num_articles[0]
+        pbar.update(num_summarised - old_summarised)
         pbar.total = graph.query(total_count_query).num_articles[0]
         pbar.refresh()
 

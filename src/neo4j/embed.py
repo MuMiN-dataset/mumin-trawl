@@ -9,7 +9,8 @@ from .graph import Graph
 
 def embed(get_query: str,
           set_embedding_query: str,
-          count_query: str,
+          total_count_query: str,
+          remaining_count_query: str,
           start_from_scratch_query: str,
           doc_preprocessing_fn: Callable = lambda x: x,
           start_from_scratch: bool = False,
@@ -25,7 +26,10 @@ def embed(get_query: str,
             The cypher query used to set the retrieved embeddings. Must take
             'id_embeddings' as an argument, which is a list of dicts, each of
             which has an 'id' entry and an 'embedding' entry.
-        count_query (str):
+        total_count_query (str):
+            The cypher query used to count the total number of relevant nodes.
+            The column containing the count must be named 'num'.
+        total_count_query (str):
             The cypher query used to count the remaining nodes that have not
             been embedded yet. The column containing the count must be named
             'num'.
@@ -55,11 +59,13 @@ def embed(get_query: str,
     model = SentenceTransformer(transformer, device=device)
 
     # Get the total number of articles and define a progress bar
-    total = graph.query(count_query).num[0]
+    total = graph.query(total_count_query).num[0]
     pbar = tqdm(total=total, desc='Adding embeddings')
+    num_embedded = graph.query(remaining_count_query).num[0]
+    pbar.update(total-num_embedded)
 
     # Continue embedding until every node has been embedded
-    while graph.query(count_query).num[0] > 0:
+    while graph.query(remaining_count_query).num[0] > 0:
 
         # Fetch new ids and docs
         df = graph.query(get_query)
@@ -77,6 +83,8 @@ def embed(get_query: str,
 
         # Update the progress bar
         pbar.update(len(docs))
+        pbar.total = graph.query(total_count_query).num[0]
+        pbar.refresh()
 
     # Close the progress bar
     pbar.close()
@@ -95,7 +103,6 @@ def embed_articles(start_from_scratch: bool = False, gpu: bool = True):
     get_query = '''
         MATCH (n:Article)
         WHERE exists(n.summary) AND
-              n.summary IS NOT NULL AND
               NOT exists(n.embedding)
         RETURN n.url AS id, n.summary AS doc
         LIMIT 3
@@ -107,9 +114,14 @@ def embed_articles(start_from_scratch: bool = False, gpu: bool = True):
         MATCH (n:Article {url:url})
         SET n.embedding = embedding
     '''
-    count_query = '''
+    total_count_query = '''
         MATCH (n:Article)
-        WHERE n.summary IS NOT NULL AND NOT exists(n.embedding)
+        WHERE exists(n.summary)
+        RETURN count(n) AS num
+    '''
+    remaining_count_query = '''
+        MATCH (n:Article)
+        WHERE exists(n.summary) AND NOT exists(n.embedding)
         RETURN count(n) AS num
     '''
     start_from_scratch_query = '''
@@ -124,7 +136,8 @@ def embed_articles(start_from_scratch: bool = False, gpu: bool = True):
 
     embed(get_query=get_query,
           set_embedding_query=set_embedding_query,
-          count_query=count_query,
+          total_count_query=total_count_query,
+          remaining_count_query=remaining_count_query,
           start_from_scratch_query=start_from_scratch_query,
           start_from_scratch=start_from_scratch,
           doc_preprocessing_fn=clean_article,
@@ -154,7 +167,12 @@ def embed_claims(start_from_scratch: bool = False, gpu: bool = True):
         MATCH (n:Claim {claim:claim})
         SET n.embedding = embedding
     '''
-    count_query = '''
+    total_count_query = '''
+        MATCH (n:Claim)
+        WHERE n.claim_en IS NOT NULL
+        RETURN count(n) AS num
+    '''
+    remaining_count_query = '''
         MATCH (n:Claim)
         WHERE n.claim_en IS NOT NULL AND NOT exists(n.embedding)
         RETURN count(n) AS num
@@ -171,7 +189,8 @@ def embed_claims(start_from_scratch: bool = False, gpu: bool = True):
 
     embed(get_query=get_query,
           set_embedding_query=set_embedding_query,
-          count_query=count_query,
+          total_count_query=total_count_query,
+          remaining_count_query=remaining_count_query,
           start_from_scratch_query=start_from_scratch_query,
           start_from_scratch=start_from_scratch,
           doc_preprocessing_fn=clean_claim,
@@ -201,7 +220,12 @@ def embed_tweets(start_from_scratch: bool = False, gpu: bool = True):
         MATCH (n:Tweet {tweetId:tweetId})
         SET n.embedding = embedding
     '''
-    count_query = '''
+    total_count_query = '''
+        MATCH (n:Tweet)
+        WHERE n.text_en IS NOT NULL
+        RETURN count(n) AS num
+    '''
+    remaining_count_query = '''
         MATCH (n:Tweet)
         WHERE n.text_en IS NOT NULL AND NOT exists(n.embedding)
         RETURN count(n) AS num
@@ -234,7 +258,8 @@ def embed_tweets(start_from_scratch: bool = False, gpu: bool = True):
 
     embed(get_query=get_query,
           set_embedding_query=set_embedding_query,
-          count_query=count_query,
+          total_count_query=total_count_query,
+          remaining_count_query=remaining_count_query,
           start_from_scratch_query=start_from_scratch_query,
           start_from_scratch=start_from_scratch,
           doc_preprocessing_fn=clean_tweet,

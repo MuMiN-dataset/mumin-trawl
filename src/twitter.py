@@ -106,11 +106,11 @@ class Twitter:
                 The maximal number of results to return. Must be at least 10.
                 Defaults to 10.
             from_date (datetime or None, optional):
-                Return tweets from this date. If None then tweets up to 30 days
-                old will be returned. If set to a date before 2006-03-21 then
-                it will be changed to 2006-03-21, as no tweets exist before
-                that time. If set to a date after today's date then it will be
-                changed to today's date. Defaults to None.
+                Return tweets from this date. If None or if set to a date
+                before 2006-03-21 then it will be changed to 2006-03-21, as
+                no tweets exist before that time. If set to a date after
+                today's date then it will be changed to today's date. Defaults
+                to None.
             to_date (datetime or None, optional):
                 Return tweets until this date, not inclusive. If None then it
                 will be set to today's date. If set to a date before 2006-03-21
@@ -158,7 +158,8 @@ class Twitter:
         '''
         # Ensure that `from_date` and `to_date` are not before 2006-03-21
         min_datetime = dt.datetime(2006, 3, 21, tzinfo=dt.timezone.utc)
-        if from_date is not None and from_date < min_datetime:
+        if (from_date is None or
+                (from_date is not None and from_date < min_datetime)):
             from_date = min_datetime
         if to_date is not None and to_date < min_datetime:
             to_date = min_datetime
@@ -388,17 +389,12 @@ class Twitter:
             user_ids = user_id
 
         # Initialise dataframes
-        tweet_df = pd.DataFrame()
         user_df = pd.DataFrame()
-        media_df = pd.DataFrame()
-        reply_df = pd.DataFrame()
-        poll_df = pd.DataFrame()
-        place_df = pd.DataFrame()
         meta_df = pd.DataFrame()
 
         # Initialise parameters used in the GET requests
         params = {'user.fields': ','.join(self.user_fields),
-                  'max_results': 1000}
+                  'max_results': 100}
 
         for user_id in user_ids:
 
@@ -430,7 +426,8 @@ class Twitter:
             if 'data' not in data_dict and 'errors' in data_dict:
                 error = data_dict['errors'][0]
                 if (('User has been suspended' in error['detail']) or
-                        ('Could not find user with id' in error['detail'])):
+                    ('Could not find' in error['detail']) or
+                    ('not authorized to see' in error['detail'])):
                     continue
                 else:
                     raise RuntimeError(error["detail"])
@@ -468,17 +465,12 @@ class Twitter:
             user_ids = user_id
 
         # Initialise dataframes
-        tweet_df = pd.DataFrame()
         user_df = pd.DataFrame()
-        media_df = pd.DataFrame()
-        reply_df = pd.DataFrame()
-        poll_df = pd.DataFrame()
-        place_df = pd.DataFrame()
         meta_df = pd.DataFrame()
 
         # Initialise parameters used in the GET request
         params = {'user.fields': ','.join(self.user_fields),
-                  'max_results': 1000}
+                  'max_results': 100}
 
         for user_id in user_ids:
 
@@ -510,7 +502,8 @@ class Twitter:
             if 'data' not in data_dict and 'errors' in data_dict:
                 error = data_dict['errors'][0]
                 if (('User has been suspended' in error['detail']) or
-                        ('Could not find user with id' in error['detail'])):
+                    ('Could not find' in error['detail']) or
+                    ('not authorized to see' in error['detail'])):
                     continue
                 else:
                     raise RuntimeError(error["detail"])
@@ -535,5 +528,154 @@ class Twitter:
                 meta_df = pd.concat((meta_df, df))
 
         all_dfs = dict(users=user_df, metadata=meta_df)
+
+        return all_dfs
+
+    def get_retweets(self, tweet_id: Union[int, List[int]]):
+
+        # Make sure `tweet_id` is a list
+        if isinstance(tweet_id, str) or isinstance(tweet_id, int):
+            tweet_ids = [tweet_id]
+        else:
+            tweet_ids = tweet_id
+
+        # Initialise dataframes
+        user_df = pd.DataFrame()
+        meta_df = pd.DataFrame()
+
+        # Initialise parameters used in the GET requests
+        params = {'user.fields': ','.join(self.user_fields)}
+
+        for tweet_id in tweet_ids:
+
+            # Define GET request endpoint
+            url = f'https://api.twitter.com/2/tweets/{tweet_id}/retweeted_by'
+
+            # Perform the GET request
+            while True:
+                try:
+                    response = requests.get(url,
+                                            params=params,
+                                            headers=self.headers)
+                    break
+                except TimeoutError:
+                    time.sleep(1)
+
+            # If we have reached the API limit then wait a bit and try again
+            while response.status_code in [429, 503]:
+                logger.debug('Request limit reached. Waiting...')
+                time.sleep(1)
+                response = requests.get(url,
+                                        params=params,
+                                        headers=self.headers)
+
+            # If the GET request failed, then stop and output the status code
+            if response.status_code != 200:
+                raise RuntimeError(f'[{response.status_code}] {response.text}')
+
+            # Convert the response to a dict
+            data_dict = response.json()
+
+            # If the query returned errors, then raise an exception
+            if 'data' not in data_dict and 'errors' in data_dict:
+                error = data_dict['errors'][0]
+                if (('User has been suspended' in error['detail']) or
+                    ('Could not find' in error['detail']) or
+                    ('not authorized to see' in error['detail'])):
+                    continue
+                else:
+                    raise RuntimeError(error["detail"])
+
+            # User dataframe
+            if 'data' in data_dict:
+                users = data_dict['data']
+                df = pd.json_normalize(users)
+                df.set_index('id', inplace=True)
+
+                # Add `retweeted` column
+                df['retweeted'] = [tweet_id for _ in range(len(df))]
+
+                user_df = pd.concat((user_df, df))
+
+            # Meta dataframe
+            meta_dict = data_dict['meta']
+            if meta_dict['result_count'] > 0:
+                meta_dict['date'] = dt.datetime.strftime(dt.datetime.utcnow(),
+                                                         '%Y-%m-%dT%H:%M:%S')
+                df = pd.DataFrame.from_records([meta_dict], index='date')
+                meta_df = pd.concat((meta_df, df))
+
+        all_dfs = dict(users=user_df, metadata=meta_df)
+
+        return all_dfs
+
+    def get_timeline(self, user_id: Union[int, List[int]]):
+
+        # Make sure `user_id` is a list
+        if isinstance(user_id, str) or isinstance(user_id, int):
+            user_ids = [user_id]
+        else:
+            user_ids = user_id
+
+        # Initialise dataframes
+        tweet_df = pd.DataFrame()
+        meta_df = pd.DataFrame()
+
+        # Initialise parameters used in the GET requests
+        params = {'tweet.fields': ','.join(self.tweet_fields)}
+
+        for user_id in user_ids:
+
+            # Define GET request endpoint
+            url = f'https://api.twitter.com/2/users/{user_id}/tweets'
+
+            # Perform the GET request
+            response = requests.get(url, params=params, headers=self.headers)
+
+            # If we have reached the API limit then wait a bit and try again
+            while response.status_code in [429, 503]:
+                logger.debug('Request limit reached. Waiting...')
+                time.sleep(1)
+                response = requests.get(url,
+                                        params=params,
+                                        headers=self.headers)
+
+            # If the GET request failed, then stop and output the status code
+            if response.status_code != 200:
+                raise RuntimeError(f'[{response.status_code}] {response.text}')
+
+            # Convert the response to a dict
+            data_dict = response.json()
+
+            # If the query returned errors, then raise an exception
+            if 'data' not in data_dict and 'errors' in data_dict:
+                error = data_dict['errors'][0]
+                if (('User has been suspended' in error['detail']) or
+                    ('Could not find' in error['detail']) or
+                    ('not authorized to see' in error['detail'])):
+                    continue
+                else:
+                    raise RuntimeError(error["detail"])
+
+            # User dataframe
+            if 'data' in data_dict:
+                tweets = data_dict['data']
+                df = pd.json_normalize(tweets)
+                df.set_index('id', inplace=True)
+
+                # Add `author` column
+                df['author'] = [user_id for _ in range(len(df))]
+
+                tweet_df = pd.concat((tweet_df, df))
+
+            # Meta dataframe
+            meta_dict = data_dict['meta']
+            if meta_dict['result_count'] > 0:
+                meta_dict['date'] = dt.datetime.strftime(dt.datetime.utcnow(),
+                                                         '%Y-%m-%dT%H:%M:%S')
+                df = pd.DataFrame.from_records([meta_dict], index='date')
+                meta_df = pd.concat((meta_df, df))
+
+        all_dfs = dict(tweets=tweet_df, metadata=meta_df)
 
         return all_dfs

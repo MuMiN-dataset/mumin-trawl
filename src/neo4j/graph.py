@@ -1,15 +1,25 @@
 '''Graph database wrapper'''
 
 from neo4j import GraphDatabase
-from neo4j.exceptions import ServiceUnavailable
+from neo4j.exceptions import ServiceUnavailable, SessionExpired, TransientError
 from dotenv import load_dotenv; load_dotenv()
 import os
 import pandas as pd
 import time
 import logging
+from timeout_decorator import timeout, TimeoutError
 
 
 logger = logging.getLogger(__name__)
+
+
+#@timeout(60 * 60)
+def run_query_with_timeout(sess, query, **kwargs):
+    with sess.begin_transaction() as tx:
+        result = tx.run(query, **kwargs)
+        data = result.data()
+        tx.commit()
+        return pd.DataFrame(data)
 
 
 class Graph:
@@ -36,12 +46,24 @@ class Graph:
         Returns:
             Pandas DataFrame: The results from the database.
         '''
+        restart_counter = 0
         with self.driver.session() as sess:
             while True:
                 try:
-                    result = sess.run(query, **kwargs)
-                    data = result.data()
-                    return pd.DataFrame(data)
-                except (ServiceUnavailable, OSError):
-                    logger.info('Graph data unavailable. Trying again.')
+                    return run_query_with_timeout(sess, query, **kwargs)
+
+                except (TimeoutError, StopIteration):
+                    print('Timed out. Rebooting graph database...')
+                    os.system('docker container restart neo4j')
+                    time.sleep(5 * 60)
+
+                except (ServiceUnavailable, OSError, SessionExpired,
+                        TransientError) as e:
+                    raise e
+                    restart_counter += 1
                     time.sleep(1)
+                    #if restart_counter >= 60:
+                    #    print('Timed out. Rebooting graph database...')
+                    #    os.system('docker container restart neo4j')
+                    #    time.sleep(5 * 60)
+                    #    restart_counter = 0

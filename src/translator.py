@@ -67,8 +67,13 @@ class GoogleTranslator:
                     continue
 
             # If we have reached the translation quota, then wait and try again
-            while response.status_code == 403:
-                logger.debug('Translation quota reached. Waiting...')
+            while response.status_code in [403, 503]:
+
+                if response.status_code == 403:
+                    logger.debug('Translation quota reached. Waiting...')
+                elif response.status_code == 503:
+                    logger.debug('Service currently unavailable. Waiting...')
+
                 time.sleep(10)
                 response = requests.post(self.base_url, data=data)
                 logger.debug(f'POST request resulted in status code '
